@@ -1,0 +1,1006 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IPv4 Datagram Header</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #07090f;
+    --panel: #0d1117;
+    --grid: #111827;
+    --border: #1e3a5f;
+    --border-bright: #2563eb;
+    --text: #c9d8f0;
+    --text-muted: #5b7a9e;
+    --text-bright: #e2f0ff;
+    --accent: #1d7dfa;
+    --accent2: #0ea5e9;
+    --glow: rgba(29,125,250,0.18);
+    --glow-strong: rgba(29,125,250,0.38);
+    --red: #ef4444;
+    --orange: #f97316;
+    --green: #22c55e;
+    --yellow: #eab308;
+    --purple: #a855f7;
+    --teal: #14b8a6;
+    --mono: 'Share Tech Mono', monospace;
+    --display: 'Rajdhani', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--display);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px 80px;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.07) 2px,
+      rgba(0,0,0,0.07) 4px
+    );
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  /* Noise texture */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 150px;
+    pointer-events: none;
+    z-index: 99;
+  }
+
+  /* Glowing grid background */
+  .grid-bg {
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, black 0%, transparent 100%);
+    pointer-events: none; z-index: 0;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 48px;
+    position: relative;
+    z-index: 1;
+    animation: fadeDown 0.7s ease both;
+  }
+
+  @keyframes fadeDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .header-badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    border: 1px solid var(--border-bright);
+    padding: 4px 14px;
+    border-radius: 2px;
+    margin-bottom: 16px;
+    background: rgba(29,125,250,0.06);
+    text-transform: uppercase;
+  }
+
+  h1 {
+    font-family: var(--display);
+    font-size: clamp(26px, 4vw, 44px);
+    font-weight: 700;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--text-bright);
+    text-shadow: 0 0 40px rgba(29,125,250,0.4);
+    line-height: 1.1;
+  }
+
+  h1 span { color: var(--accent); }
+
+  .subtitle {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 10px;
+    letter-spacing: 2px;
+  }
+
+  /* === LEGEND === */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 36px;
+    animation: fadeDown 0.8s ease 0.1s both;
+    z-index: 1;
+    position: relative;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 5px 12px;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 2px;
+    background: rgba(255,255,255,0.02);
+  }
+
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  /* === DIAGRAM WRAPPER === */
+  .diagram-wrapper {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 960px;
+    animation: fadeUp 0.8s ease 0.2s both;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Bit ruler */
+  .bit-ruler {
+    display: flex;
+    width: 100%;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    position: relative;
+  }
+
+  .bit-ruler-label {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0 2px;
+  }
+
+  .bit-ruler-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-left: 1px solid var(--border);
+    padding: 0 4px;
+  }
+
+  /* === TABLE === */
+  .header-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(29,125,250,0.1),
+      0 0 60px rgba(29,125,250,0.06),
+      0 20px 60px rgba(0,0,0,0.6);
+  }
+
+  .header-table tr {
+    display: flex;
+    width: 100%;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .header-table tr:last-child { border-bottom: none; }
+
+  /* Row label */
+  .row-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    writing-mode: horizontal-tb;
+    padding: 0 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-end;
+    border-right: 1px solid var(--border);
+    min-width: 56px;
+    background: rgba(0,0,0,0.2);
+    gap: 2px;
+    flex-shrink: 0;
+  }
+
+  .row-label .byte-num { color: var(--accent); font-size: 11px; }
+  .row-label .bit-range { font-size: 9px; opacity: 0.6; }
+
+  /* Row content */
+  .row-content {
+    display: flex;
+    flex: 1;
+    min-height: 58px;
+  }
+
+  /* === FIELD CELLS === */
+  .field {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 6px 4px;
+    cursor: pointer;
+    border-right: 1px solid var(--border);
+    transition: all 0.15s ease;
+    overflow: hidden;
+    text-align: center;
+    gap: 2px;
+  }
+
+  .field:last-child { border-right: none; }
+
+  /* Field shimmer on hover */
+  .field::before {
+    content: '';
+    position: absolute; inset: 0;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+  }
+
+  .field:hover::before { opacity: 1; }
+
+  .field:hover {
+    z-index: 2;
+    transform: scaleY(1.02);
+    box-shadow: inset 0 0 20px rgba(255,255,255,0.04);
+  }
+
+  /* Color scheme per field type */
+  .field.cat-core      { background: rgba(29,125,250,0.07); }
+  .field.cat-core::before { background: radial-gradient(ellipse at center, rgba(29,125,250,0.18), transparent 70%); }
+  .field.cat-core:hover    { border-color: rgba(29,125,250,0.5); }
+
+  .field.cat-service   { background: rgba(14,165,233,0.07); }
+  .field.cat-service::before { background: radial-gradient(ellipse at center, rgba(14,165,233,0.18), transparent 70%); }
+  .field.cat-service:hover   { border-color: rgba(14,165,233,0.5); }
+
+  .field.cat-fragment  { background: rgba(168,85,247,0.07); }
+  .field.cat-fragment::before { background: radial-gradient(ellipse at center, rgba(168,85,247,0.18), transparent 70%); }
+  .field.cat-fragment:hover   { border-color: rgba(168,85,247,0.5); }
+
+  .field.cat-routing   { background: rgba(239,68,68,0.07); }
+  .field.cat-routing::before { background: radial-gradient(ellipse at center, rgba(239,68,68,0.18), transparent 70%); }
+  .field.cat-routing:hover   { border-color: rgba(239,68,68,0.5); }
+
+  .field.cat-address   { background: rgba(34,197,94,0.07); }
+  .field.cat-address::before { background: radial-gradient(ellipse at center, rgba(34,197,94,0.18), transparent 70%); }
+  .field.cat-address:hover   { border-color: rgba(34,197,94,0.5); }
+
+  .field.cat-options   { background: rgba(234,179,8,0.07); }
+  .field.cat-options::before { background: radial-gradient(ellipse at center, rgba(234,179,8,0.18), transparent 70%); }
+  .field.cat-options:hover   { border-color: rgba(234,179,8,0.5); }
+
+  .field.cat-data      { background: rgba(20,184,166,0.07); }
+  .field.cat-data::before { background: radial-gradient(ellipse at center, rgba(20,184,166,0.18), transparent 70%); }
+  .field.cat-data:hover    { border-color: rgba(20,184,166,0.5); }
+
+  .field-name {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: clamp(9px, 1.3vw, 13px);
+    letter-spacing: 0.5px;
+    color: var(--text-bright);
+    text-transform: uppercase;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  .field-bits {
+    font-family: var(--mono);
+    font-size: clamp(8px, 1vw, 11px);
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  /* Active glow indicator */
+  .field-indicator {
+    position: absolute;
+    bottom: 3px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .field:hover .field-indicator { opacity: 1; }
+  .cat-core     .field-indicator { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .cat-service  .field-indicator { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+  .cat-fragment .field-indicator { background: var(--purple); box-shadow: 0 0 6px var(--purple); }
+  .cat-routing  .field-indicator { background: var(--red); box-shadow: 0 0 6px var(--red); }
+  .cat-address  .field-indicator { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .cat-options  .field-indicator { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+  .cat-data     .field-indicator { background: var(--teal);   box-shadow: 0 0 6px var(--teal); }
+
+  /* === BIT COLUMN WIDTHS: each unit = 1 bit out of 32 === */
+  /* Helper: flex-basis as % of 32 bits */
+
+  /* === TOOLTIP === */
+  .tooltip {
+    position: fixed;
+    z-index: 9999;
+    width: 320px;
+    background: #0c131e;
+    border: 1px solid var(--border-bright);
+    border-radius: 6px;
+    padding: 0;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    box-shadow:
+      0 0 0 1px rgba(29,125,250,0.15),
+      0 0 30px rgba(29,125,250,0.15),
+      0 20px 40px rgba(0,0,0,0.7);
+    overflow: hidden;
+  }
+
+  .tooltip.visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  .tooltip-header {
+    padding: 12px 16px 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .tooltip-title {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-bright);
+  }
+
+  .tooltip-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 2px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .cat-core     .tooltip-badge, .tt-badge-core     { background: rgba(29,125,250,0.15); color: #60a5fa; border: 1px solid rgba(29,125,250,0.3); }
+  .cat-service  .tooltip-badge, .tt-badge-service  { background: rgba(14,165,233,0.15); color: #38bdf8; border: 1px solid rgba(14,165,233,0.3); }
+  .cat-fragment .tooltip-badge, .tt-badge-fragment { background: rgba(168,85,247,0.15); color: #c084fc; border: 1px solid rgba(168,85,247,0.3); }
+  .cat-routing  .tooltip-badge, .tt-badge-routing  { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
+  .cat-address  .tooltip-badge, .tt-badge-address  { background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
+  .cat-options  .tooltip-badge, .tt-badge-options  { background: rgba(234,179,8,0.15); color: #facc15; border: 1px solid rgba(234,179,8,0.3); }
+  .cat-data     .tooltip-badge, .tt-badge-data     { background: rgba(20,184,166,0.15); color: #2dd4bf; border: 1px solid rgba(20,184,166,0.3); }
+
+  .tooltip-body { padding: 12px 16px; }
+
+  .tooltip-desc {
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-bottom: 12px;
+  }
+
+  .tooltip-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .meta-chip {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 9px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text);
+  }
+
+  .meta-chip strong {
+    color: var(--text-bright);
+    font-weight: normal;
+  }
+
+  /* Sub-fields */
+  .subfields-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .subfield {
+    display: flex;
+    gap: 0;
+    margin-bottom: 5px;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 3px;
+    overflow: hidden;
+    background: rgba(0,0,0,0.2);
+  }
+
+  .subfield-tag {
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 5px 8px;
+    background: rgba(255,255,255,0.04);
+    border-right: 1px solid rgba(255,255,255,0.08);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-width: 42px;
+    gap: 1px;
+  }
+
+  .subfield-bit-label { color: var(--accent); font-size: 9px; }
+  .subfield-bit-val   { color: var(--text-muted); font-size: 8px; }
+
+  .subfield-content { padding: 5px 10px; flex: 1; }
+
+  .subfield-name {
+    font-family: var(--display);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-bright);
+    margin-bottom: 2px;
+  }
+
+  .subfield-desc {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+
+  /* Values table inside tooltip */
+  .values-table {
+    width: 100%;
+    font-family: var(--mono);
+    font-size: 10px;
+    border-collapse: collapse;
+    margin-top: 8px;
+  }
+
+  .values-table th {
+    text-align: left;
+    color: var(--text-muted);
+    font-weight: normal;
+    padding: 3px 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .values-table td {
+    padding: 3px 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: var(--text);
+  }
+
+  .values-table td:first-child { color: var(--accent); }
+
+  /* === BIT RULER === */
+  .ruler-wrap {
+    display: flex;
+    width: 100%;
+    margin-bottom: 2px;
+    padding-left: 56px;
+  }
+
+  .ruler-inner {
+    display: flex;
+    flex: 1;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+
+  .ruler-bit {
+    flex: 1;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text-muted);
+    padding: 2px 0;
+    border-right: 1px solid rgba(255,255,255,0.04);
+    opacity: 0.7;
+  }
+
+  .ruler-bit:nth-child(8n+1) { color: var(--accent); opacity: 1; }
+  .ruler-bit:last-child { border-right: none; }
+
+  /* === FOOTER === */
+  footer {
+    margin-top: 40px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 2px;
+    text-align: center;
+    z-index: 1;
+    animation: fadeUp 1s ease 0.4s both;
+  }
+
+  footer a { color: var(--accent); text-decoration: none; }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .tooltip { width: calc(100vw - 20px); max-width: 320px; }
+    .row-label { min-width: 40px; padding: 0 4px; font-size: 9px; }
+    .ruler-wrap { padding-left: 40px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+
+<header>
+  <div class="header-badge">RFC 791 · IETF Standard</div>
+  <h1>IPv<span>4</span> Datagram Header</h1>
+  <p class="subtitle">// header: 20–60 bytes · datagram: up to 65,535 bytes · hover fields for details</p>
+</header>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:rgba(29,125,250,0.6)"></div>Core / Version</div>
+  <div class="legend-item"><div class="legend-dot" style="background:rgba(14,165,233,0.6)"></div>Service</div>
+  <div class="legend-item"><div class="legend-dot" style="background:rgba(168,85,247,0.6)"></div>Fragmentation</div>
+  <div class="legend-item"><div class="legend-dot" style="background:rgba(239,68,68,0.6)"></div>Routing / TTL</div>
+  <div class="legend-item"><div class="legend-dot" style="background:rgba(34,197,94,0.6)"></div>Addressing</div>
+  <div class="legend-item"><div class="legend-dot" style="background:rgba(234,179,8,0.6)"></div>Options / Padding</div>
+  <div class="legend-item"><div class="legend-dot" style="background:rgba(20,184,166,0.6)"></div>Data / Payload</div>
+</div>
+
+<div class="diagram-wrapper">
+
+  <!-- Bit ruler: 0–31 -->
+  <div class="ruler-wrap">
+    <div class="ruler-inner" id="ruler"></div>
+  </div>
+
+  <table class="header-table" id="headerTable">
+    <!-- Rows injected by JS -->
+  </table>
+</div>
+
+<footer>
+  <span>IPv4 · RFC 791 · September 1981</span> &nbsp;·&nbsp;
+  <span>Hover any field to inspect</span>
+</footer>
+
+<!-- Tooltip -->
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+// === DATA ===
+const FIELDS = [
+  // Row 0: Bytes 0–3 (bits 0–31)
+  {
+    name: 'Version',
+    bits: 4, row: 0, cat: 'core',
+    desc: 'Identifies the IP protocol version. For IPv4, this value is always 4.',
+    min: 4, max: 4,
+    note: 'Always 0100₂ (4) for IPv4. IPv6 uses 0110₂ (6).',
+    subfields: null,
+  },
+  {
+    name: 'IHL',
+    bits: 4, row: 0, cat: 'core',
+    desc: 'Internet Header Length — specifies the header size in 32-bit (4-byte) words.',
+    min: '5 (20 bytes)', max: '15 (60 bytes)',
+    note: 'Minimum value of 5 means no options. Maximum of 15 means 60 bytes of header.',
+    subfields: null,
+  },
+  {
+    name: 'DSCP',
+    bits: 6, row: 0, cat: 'service',
+    desc: 'Differentiated Services Code Point — specifies per-hop behavior for QoS policies (replaces old TOS Precedence+D/T/R bits).',
+    min: 0, max: 63,
+    note: 'Defined in RFC 2474. Common values: 0 = Best Effort, 46 = Expedited Forwarding (EF), 8/16/24 = Class Selectors.',
+    subfields: [
+      { name: 'DSCP Value', bits: '6 bits', desc: 'Per-hop behavior class. Upper 3 bits = Class Selector; lower 3 = drop preference.' },
+    ],
+  },
+  {
+    name: 'ECN',
+    bits: 2, row: 0, cat: 'service',
+    desc: 'Explicit Congestion Notification — allows end-to-end notification of network congestion without dropping packets.',
+    min: 0, max: 3,
+    note: 'RFC 3168. Requires both endpoints to support ECN. Value 11₂ (CE) = Congestion Experienced.',
+    subfields: [
+      { name: 'ECT(1)', bits: 'bit 6', desc: 'ECN-Capable Transport bit 1.' },
+      { name: 'ECT(0)', bits: 'bit 7', desc: 'ECN-Capable Transport bit 0.' },
+    ],
+    values: [
+      { val: '00', meaning: 'Not ECN-Capable Transport' },
+      { val: '01', meaning: 'ECN-Capable Transport (ECT(1))' },
+      { val: '10', meaning: 'ECN-Capable Transport (ECT(0))' },
+      { val: '11', meaning: 'Congestion Experienced (CE)' },
+    ],
+  },
+  {
+    name: 'Total Length',
+    bits: 16, row: 0, cat: 'core',
+    desc: 'Defines the entire datagram size in bytes, including header and data.',
+    min: '20 bytes (header only)', max: '65,535 bytes',
+    note: 'RFC 791 mandates all hosts handle datagrams of at least 576 bytes. Minimum with empty payload = IHL × 4.',
+    subfields: null,
+  },
+
+  // Row 1: Bytes 4–7 (bits 32–63)
+  {
+    name: 'Identification',
+    bits: 16, row: 1, cat: 'fragment',
+    desc: 'Uniquely identifies a group of fragments belonging to the same original datagram.',
+    min: 0, max: 65535,
+    note: 'Assigned by the sender; all fragments of one datagram share the same ID. Used with Flags and Fragment Offset for reassembly.',
+    subfields: null,
+  },
+  {
+    name: 'Flags',
+    bits: 3, row: 1, cat: 'fragment',
+    desc: 'Three 1-bit control flags governing fragmentation behavior.',
+    min: 0, max: '7 (3 bits)',
+    note: 'Bit 0 is reserved (must be 0). DF and MF control fragmentation.',
+    subfields: [
+      { name: 'Bit 0', bits: 'Reserved', desc: 'Must be zero (0). Reserved for future use.' },
+      { name: 'Bit 1 — DF', bits: "Don't Fragment", desc: "If set (1), router must not fragment. Packet is dropped with ICMP Type 3 Code 4 if too large." },
+      { name: 'Bit 2 — MF', bits: 'More Fragments', desc: 'If set (1), more fragments follow. Last/only fragment has MF=0.' },
+    ],
+  },
+  {
+    name: 'Fragment Offset',
+    bits: 13, row: 1, cat: 'fragment',
+    desc: 'Specifies the offset of this fragment relative to the start of the original unfragmented datagram, measured in 8-byte units.',
+    min: 0, max: '8,191 × 8 = 65,528 bytes',
+    note: 'Value 0 = first fragment. Unit is 8-byte blocks (not bytes). All fragments except last must be a multiple of 8 bytes in size.',
+    subfields: null,
+  },
+
+  // Row 2: Bytes 8–11 (bits 64–95)
+  {
+    name: 'TTL',
+    bits: 8, row: 2, cat: 'routing',
+    desc: 'Time To Live — limits the datagram lifetime. Decremented by 1 at each router hop; discarded when it reaches 0.',
+    min: 1, max: 255,
+    note: 'Default values: Linux=64, Windows=128, Cisco=255. Originally seconds but used as hop count. Prevents routing loops.',
+    subfields: null,
+  },
+  {
+    name: 'Protocol',
+    bits: 8, row: 2, cat: 'routing',
+    desc: 'Identifies the next-level protocol encapsulated in the IP payload.',
+    min: 0, max: 255,
+    note: 'Defined by IANA. Enables demultiplexing at the receiver.',
+    subfields: null,
+    values: [
+      { val: '1',  meaning: 'ICMP' },
+      { val: '2',  meaning: 'IGMP' },
+      { val: '6',  meaning: 'TCP' },
+      { val: '17', meaning: 'UDP' },
+      { val: '41', meaning: 'IPv6 (tunneling)' },
+      { val: '89', meaning: 'OSPF' },
+      { val: '132', meaning: 'SCTP' },
+    ],
+  },
+  {
+    name: 'Header Checksum',
+    bits: 16, row: 2, cat: 'routing',
+    desc: "16-bit one's complement checksum of the header only (not the payload). Recomputed at each router hop due to TTL changes.",
+    min: 0, max: '0xFFFF',
+    note: "Computed using one's complement arithmetic. A value of 0xFFFF means no errors detected. IPv6 dropped this field entirely.",
+    subfields: null,
+  },
+
+  // Row 3: Bytes 12–15 (bits 96–127)
+  {
+    name: 'Source Address',
+    bits: 32, row: 3, cat: 'address',
+    desc: 'The IPv4 address of the originating host, expressed as a 32-bit number.',
+    min: '0.0.0.0', max: '255.255.255.255',
+    note: 'Can be spoofed (source routing / forged). Divided into network and host parts based on subnet mask. CIDR replaced classful routing.',
+    subfields: [
+      { name: 'Octet 1', bits: 'bits 0–7',  desc: 'Most-significant byte of the address.' },
+      { name: 'Octet 2', bits: 'bits 8–15', desc: 'Second byte.' },
+      { name: 'Octet 3', bits: 'bits 16–23',desc: 'Third byte.' },
+      { name: 'Octet 4', bits: 'bits 24–31',desc: 'Least-significant byte (host portion in /24).' },
+    ],
+  },
+
+  // Row 4: Bytes 16–19 (bits 128–159)
+  {
+    name: 'Destination Address',
+    bits: 32, row: 4, cat: 'address',
+    desc: 'The IPv4 address of the intended recipient, expressed as a 32-bit number.',
+    min: '0.0.0.0', max: '255.255.255.255',
+    note: 'Broadcast: 255.255.255.255. Multicast: 224.0.0.0–239.255.255.255. Loopback: 127.0.0.1. Link-local: 169.254.0.0/16.',
+    subfields: [
+      { name: 'Octet 1', bits: 'bits 0–7',  desc: 'Most-significant byte.' },
+      { name: 'Octet 2', bits: 'bits 8–15', desc: 'Second byte.' },
+      { name: 'Octet 3', bits: 'bits 16–23',desc: 'Third byte.' },
+      { name: 'Octet 4', bits: 'bits 24–31',desc: 'Least-significant (host) byte.' },
+    ],
+  },
+
+  // Row 5: Bytes 20–23 (bits 160–191) — Options (variable)
+  {
+    name: 'Options',
+    bits: 24, row: 5, cat: 'options', // shown as "up to 40 bytes"
+    desc: 'Optional fields present only if IHL > 5. Used for timestamping, routing, security, etc. Rarely used in modern networks.',
+    min: '0 bytes (absent)', max: '40 bytes',
+    note: 'Each option begins with a 1-byte type field. Most routers ignore or strip options. Common options include Loose/Strict Source Routing, Record Route, and Internet Timestamp.',
+    subfields: [
+      { name: 'Copied (1 bit)',  bits: '1 bit',  desc: 'If 1, option is copied into each fragment.' },
+      { name: 'Class (2 bits)', bits: '2 bits', desc: '0 = control, 2 = debugging/measurement.' },
+      { name: 'Number (5 bits)',bits: '5 bits', desc: 'Identifies the specific option type.' },
+      { name: 'Length (1 byte)',bits: '8 bits', desc: 'Length of this option in bytes (including type and length bytes).' },
+      { name: 'Data',           bits: 'variable',desc: 'Option-specific data (0 to 38 bytes).' },
+    ],
+    values: [
+      { val: '0',  meaning: 'End of Option List' },
+      { val: '1',  meaning: 'No Operation (NOP / padding)' },
+      { val: '7',  meaning: 'Record Route' },
+      { val: '68', meaning: 'Internet Timestamp' },
+      { val: '130',meaning: 'Loose Source Routing' },
+      { val: '137',meaning: 'Strict Source Routing' },
+    ],
+  },
+  {
+    name: 'Padding',
+    bits: 8, row: 5, cat: 'options',
+    desc: 'Zero-filled bytes appended after Options to ensure the header ends on a 32-bit (4-byte) word boundary.',
+    min: 0, max: '3 bytes (24 bits)',
+    note: 'All padding bits are set to 0. Padding is only needed when Options do not already end on a word boundary.',
+    subfields: null,
+  },
+
+  // Row 6: Data / Payload (variable)
+  {
+    name: 'Data',
+    bits: 32, row: 6, cat: 'data',
+    bitLabel: 'variable',
+    desc: 'The payload carried by the datagram — typically a transport-layer segment (TCP, UDP, ICMP, etc.) or tunneled packet.',
+    min: '0 bytes (header-only packet)', max: '65,515 bytes (65,535 − 20 byte min header)',
+    note: 'Actual max depends on IHL: max payload = 65,535 − (IHL × 4). With options (IHL=15): max = 65,535 − 60 = 65,475 bytes. Data is not interpreted by IP — it is handed as-is to the upper layer identified by the Protocol field.',
+    subfields: [
+      { name: 'Transport Header', bits: 'variable', desc: 'E.g., TCP (min 20 bytes), UDP (8 bytes), ICMP (8 bytes min). Structure determined by the Protocol field.' },
+      { name: 'Application Data', bits: 'variable', desc: 'Arbitrary application payload carried inside the transport segment. Not examined by IP routers.' },
+    ],
+    values: [
+      { val: 'Protocol 6',  meaning: 'TCP segment (min 20-byte TCP header + data)' },
+      { val: 'Protocol 17', meaning: 'UDP datagram (8-byte UDP header + data)' },
+      { val: 'Protocol 1',  meaning: 'ICMP message (8-byte ICMP header + data)' },
+      { val: 'Protocol 41', meaning: 'IPv6 packet (tunneled; min 40 bytes)' },
+    ],
+  },
+];
+const rows = {};
+FIELDS.forEach(f => {
+  if (!rows[f.row]) rows[f.row] = [];
+  rows[f.row].push(f);
+});
+
+// Row metadata
+const ROW_META = [
+  { label: 'Row 0', bytes: '0–3',  bits: '0–31' },
+  { label: 'Row 1', bytes: '4–7',  bits: '32–63' },
+  { label: 'Row 2', bytes: '8–11', bits: '64–95' },
+  { label: 'Row 3', bytes: '12–15',bits: '96–127' },
+  { label: 'Row 4', bytes: '16–19',bits: '128–159' },
+  { label: 'Row 5', bytes: '20–59',bits: '160–479*' },
+  { label: 'Row 6', bytes: '20–65515', bits: 'Payload' },
+];
+
+// === RENDER BIT RULER ===
+const ruler = document.getElementById('ruler');
+for (let i = 0; i < 32; i++) {
+  const d = document.createElement('div');
+  d.className = 'ruler-bit';
+  d.textContent = i;
+  ruler.appendChild(d);
+}
+
+// === RENDER TABLE ===
+const table = document.getElementById('headerTable');
+
+Object.keys(rows).sort((a,b)=>a-b).forEach(rowIdx => {
+  const fields = rows[rowIdx];
+  const meta = ROW_META[rowIdx];
+
+  const tr = document.createElement('tr');
+
+  // Row label
+  const labelTd = document.createElement('td');
+  labelTd.className = 'row-label';
+  if (parseInt(rowIdx) === 6) {
+    labelTd.innerHTML = `<span class="byte-num" style="color:var(--teal)">Data</span><span class="bit-range">20–65515 B</span>`;
+    tr.style.borderTop = '2px dashed rgba(20,184,166,0.25)';
+  } else {
+    labelTd.innerHTML = `<span class="byte-num">B ${meta.bytes}</span><span class="bit-range">${meta.bits}</span>`;
+  }
+  tr.appendChild(labelTd);
+
+  // Row content
+  const contentTd = document.createElement('td');
+  contentTd.className = 'row-content';
+
+  // Total bits in row for flex proportions
+  const totalBits = fields.reduce((s, f) => s + f.bits, 0);
+
+  fields.forEach((field, fi) => {
+    const div = document.createElement('div');
+    div.className = `field cat-${field.cat}`;
+    // flex proportion based on bits
+    div.style.flex = `${field.bits} 0 0`;
+
+    // For the data row, make it taller and span full width visually
+    if (field.cat === 'data') {
+      div.style.flex = '1 0 0';
+      div.style.minHeight = '72px';
+      div.style.borderTop = '2px dashed rgba(20,184,166,0.3)';
+    }
+
+    const bitLabel = field.bitLabel ? field.bitLabel : (field.bits === 1 ? '1 bit' : `${field.bits} bits`);
+    const byteRangeHtml = field.cat === 'data'
+      ? `<span class="field-bits" style="color:rgba(20,184,166,0.7);margin-top:2px;">0 – 65,515 bytes</span>`
+      : '';
+
+    div.innerHTML = `
+      <span class="field-name">${field.name}</span>
+      <span class="field-bits">${bitLabel}</span>
+      ${byteRangeHtml}
+      <span class="field-indicator"></span>
+    `;
+
+    div.addEventListener('mouseenter', (e) => showTooltip(e, field));
+    div.addEventListener('mousemove', (e) => positionTooltip(e));
+    div.addEventListener('mouseleave', () => hideTooltip());
+
+    contentTd.appendChild(div);
+  });
+
+  tr.appendChild(contentTd);
+  table.appendChild(tr);
+});
+
+// === TOOLTIP ===
+const tooltip = document.getElementById('tooltip');
+let tooltipVisible = false;
+
+function buildTooltip(field) {
+  const catClass = `tt-badge-${field.cat}`;
+  const badgeNames = {
+    core: 'Core', service: 'Service', fragment: 'Fragmentation',
+    routing: 'Routing', address: 'Addressing', options: 'Options', data: 'Payload'
+  };
+  const sizeLabel = field.bitLabel ? field.bitLabel : `${field.bits} bit${field.bits!==1?'s':''}`;
+
+  let html = `
+    <div class="tooltip-header">
+      <span class="tooltip-title">${field.name}</span>
+      <span class="tooltip-badge ${catClass}">${badgeNames[field.cat]} · ${sizeLabel}</span>
+    </div>
+    <div class="tooltip-body">
+      <p class="tooltip-desc">${field.desc}</p>
+      <div class="tooltip-meta">
+        <span class="meta-chip">Min: <strong>${field.min}</strong></span>
+        <span class="meta-chip">Max: <strong>${field.max}</strong></span>
+      </div>
+  `;
+
+  if (field.note) {
+    html += `<p class="tooltip-desc" style="font-size:11px;color:#4a6a8a;margin-bottom:12px;">ℹ ${field.note}</p>`;
+  }
+
+  if (field.subfields && field.subfields.length > 0) {
+    html += `<div class="subfields-label">Sub-fields</div>`;
+    field.subfields.forEach(sf => {
+      html += `
+        <div class="subfield">
+          <div class="subfield-tag">
+            <span class="subfield-bit-label">${sf.bits}</span>
+          </div>
+          <div class="subfield-content">
+            <div class="subfield-name">${sf.name}</div>
+            <div class="subfield-desc">${sf.desc}</div>
+          </div>
+        </div>`;
+    });
+  }
+
+  if (field.values && field.values.length > 0) {
+    html += `<div class="subfields-label" style="margin-top:12px;">Common Values</div>
+    <table class="values-table">
+      <tr><th>Value</th><th>Meaning</th></tr>`;
+    field.values.forEach(v => {
+      html += `<tr><td>${v.val}</td><td>${v.meaning}</td></tr>`;
+    });
+    html += '</table>';
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+function showTooltip(e, field) {
+  tooltip.innerHTML = buildTooltip(field);
+  tooltip.classList.add('visible');
+  tooltipVisible = true;
+  positionTooltip(e);
+}
+
+function positionTooltip(e) {
+  if (!tooltipVisible) return;
+  const tw = tooltip.offsetWidth || 320;
+  const th = tooltip.offsetHeight || 200;
+  const pad = 14;
+  let x = e.clientX + 18;
+  let y = e.clientY + 18;
+
+  if (x + tw > window.innerWidth - pad) x = e.clientX - tw - 12;
+  if (y + th > window.innerHeight - pad) y = e.clientY - th - 12;
+  if (x < pad) x = pad;
+  if (y < pad) y = pad;
+
+  tooltip.style.left = x + 'px';
+  tooltip.style.top  = y + 'px';
+}
+
+function hideTooltip() {
+  tooltip.classList.remove('visible');
+  tooltipVisible = false;
+}
+</script>
+</body>
+</html>
